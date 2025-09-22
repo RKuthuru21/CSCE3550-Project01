@@ -1,7 +1,6 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 import jwt
-import json
 
 from main import app
 from keystore import keystore, KeyStore
@@ -21,6 +20,7 @@ def test_jwks_only_unexpired_keys():
     assert jwk["use"] == "sig"
     assert "kid" in jwk and "n" in jwk and "e" in jwk
 
+
 def _decode_with_store(token: str):
     # Inspect header to choose the right public key
     headers = jwt.get_unverified_header(token)
@@ -30,21 +30,25 @@ def _decode_with_store(token: str):
     pem_pub = KeyStore.pub_to_pem(kp.priv)
     return jwt.decode(token, pem_pub, algorithms=["RS256"])
 
+
 def test_auth_valid_token_uses_active_key_and_future_exp():
     client = app.test_client()
     resp = client.post("/auth")
     assert resp.status_code == 200
-    tok = resp.get_json()["token"]
+    # ✅ read the raw JWT string returned by the endpoint
+    tok = resp.get_data(as_text=True)
     decoded = _decode_with_store(tok)
     assert decoded["iss"] == "jwks-server"
     assert decoded["sub"] == "fake-user"
     assert decoded["exp"] > int(datetime.now(timezone.utc).timestamp())
 
+
 def test_auth_expired_param_returns_expired_token_signed_by_expired_key():
     client = app.test_client()
     resp = client.post("/auth?expired=1")
     assert resp.status_code == 200
-    tok = resp.get_json()["token"]
+    # ✅ read the raw JWT string returned by the endpoint
+    tok = resp.get_data(as_text=True)
 
     # Verify signature but expect expiration failure when validating with options
     headers = jwt.get_unverified_header(tok)
